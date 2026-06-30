@@ -1,103 +1,183 @@
-# Arquitectura del proyecto Task Manager
+# Arquitectura — Task Manager
 
 ## 1. Visión general
 
-El repositorio está compuesto por dos piezas independientes pero conectadas:
+El repositorio contiene dos piezas independientes pero conectadas:
 
-- Backend: API REST en ASP.NET Core con .NET 8.
-- Frontend: aplicación móvil en React Native CLI con TypeScript.
+- **Backend**: API REST en ASP.NET Core con .NET 8, organizada en capas siguiendo Clean Architecture.
+- **Frontend**: aplicación móvil en React Native CLI con TypeScript, organizada por features con capas internas.
 
-La app permite listar tareas, aplicar filtros por estado o prioridad y consultar el detalle de una tarea. El backend debe encargarse de acceso a datos, reglas y exposición de servicios, mientras que el frontend debe centrarse en la experiencia del usuario, en cómo se ve la información y en cómo se navega entre pantallas.
+La app permite listar tareas, filtrarlas por estado o prioridad y consultar el detalle de cada una.
 
-## 2. Arquitectura del backend
+---
 
-### Capa API
+## 2. Diagrama de comunicación
 
-- [BackEnd/src/TaskManager.API/Program.cs](../BackEnd/src/TaskManager.API/Program.cs)
-- [BackEnd/src/TaskManager.API/Controllers/TasksController.cs](../BackEnd/src/TaskManager.API/Controllers/TasksController.cs)
+```
+┌─────────────────────────────────────────────────────┐
+│                  Dispositivo Android                 │
+│                                                      │
+│  TaskListView / TaskDetailView / TaskFilterView      │
+│          ↓ useAsync                                  │
+│  taskListRepository / taskDetailRepository           │
+│          ↓ fetch                                     │
+└──────────────────────┬──────────────────────────────┘
+                       │ HTTP (REST)
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│                   TaskManager.API                    │
+│           TasksController (ASP.NET Core)             │
+│          ↓ ITaskService                              │
+│                 TaskManager.Application              │
+│                   TaskService                        │
+│          ↓ ITaskRepository                           │
+│                 TaskManager.Infrastructure           │
+│                   TaskRepository (Dapper)            │
+│          ↓ Stored Procedure                          │
+└──────────────────────┬──────────────────────────────┘
+                       │
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│                    SQL Server                        │
+│   Priorities / Statuses / Tasks                      │
+│   sp_GetTasks / sp_GetTaskById / sp_GetCatalogs      │
+└─────────────────────────────────────────────────────┘
+```
 
-Esta capa me sirve como puerta de entrada al sistema. Decidi mantenerla asi, porque no quiero que el controlador sea el lugar donde se mezclen HTTP, reglas de negocio y acceso a datos. Su trabajo es recibir la petición, delegar en la aplicación y devolver una respuesta clara. De esa forma, si mañana cambia el contrato REST, el corazón de la lógica puede seguir igual.
+---
+
+## 3. Arquitectura del backend
+
+El backend sigue Clean Architecture con cuatro proyectos. La regla de dependencia es unidireccional: las capas externas dependen de las internas, nunca al revés.
+
+```
+TaskManager.API
+    └── TaskManager.Application
+            └── TaskManager.Domain
+TaskManager.Infrastructure
+    └── TaskManager.Application
+    └── TaskManager.Domain
+```
+
+### Capa Domain
+
+Entidades del negocio sin dependencias externas. `TaskItem` protege su propio estado con setters privados y valida el título en el constructor — ningún objeto puede existir en estado inválido.
+
+> Archivos clave: `Domain/Entities/TaskItem.cs`, `Domain/Enums/`, `Domain/Exceptions/DomainException.cs`
 
 ### Capa Application
 
-- [BackEnd/src/TaskManager.Application/Services/TaskService.cs](../BackEnd/src/TaskManager.Application/Services/TaskService.cs)
+Interfaces (`ITaskRepository`, `ITaskService`) y servicios que orquestan los casos de uso. Application define qué necesita el sistema pero no sabe cómo se implementa — no conoce Dapper ni SQL Server.
 
-Aquí es donde yo ubico la lógica de negocio que no pertenece ni al controlador ni a la infraestructura. El service coordina los casos de uso, valida reglas de negocio como un `id` inválido y decide qué repositorio debe resolver la información. Considero que asi si en un proyecto mas grande aparece una regla nueva o una integración distinta, no necesito tocar la API ni la base de datos para adaptarlo.
+> Archivos clave: `Application/Services/TaskService.cs`, `Application/Interfaces/`, `Application/DTOs/`
 
 ### Capa Infrastructure
 
-- [BackEnd/src/TaskManager.Infrastructure/Repositories/TaskRepository.cs](../BackEnd/src/TaskManager.Infrastructure/Repositories/TaskRepository.cs)
-- [BackEnd/src/TaskManager.Infrastructure/Data/DbConnectionFactory.cs](../BackEnd/src/TaskManager.Infrastructure/Data/DbConnectionFactory.cs)
+Implementación concreta del acceso a datos. `TaskRepository` usa Dapper para mapear el resultado de los stored procedures directamente a DTOs. `DbConnectionFactory` centraliza la creación de conexiones.
 
-Aquí todo lo que depende de tecnología concreta. El repositorio conoce cómo consultar la base de datos, y `DbConnectionFactory` me permite obtener conexiones sin repetir la configuración en cada método, asi que solo batsa con llamarla. Además, yo uso Dapper porque el reto exige stored procedures explícitos y Dapper me da un mapeo directo del resultado SQL a DTOs, sin añadir una capa de abstracción demasiado hardcodeada como la que suele traer un ORM completo.
+> Archivos clave: `Infrastructure/Repositories/TaskRepository.cs`, `Infrastructure/Data/DbConnectionFactory.cs`
 
-## 3. Arquitectura del frontend
+### Capa API
 
-### Estructura por features
+Punto de entrada HTTP. Los controllers reciben la petición, delegan en `ITaskService` y devuelven la respuesta. `ExceptionMiddleware` intercepta errores y los traduce a códigos HTTP apropiados (`DomainException` → 400, resto → 500).
 
-- [FrontEnd/src/features/TaskList](../FrontEnd/src/features/TaskList)
-- [FrontEnd/src/features/TaskDetail](../FrontEnd/src/features/TaskDetail)
-- [FrontEnd/src/features/TaskFilter](../FrontEnd/src/features/TaskFilter)
+> Archivos clave: `API/Controllers/TasksController.cs`, `API/Middleware/ExceptionMiddleware.cs`
 
-He organizado el frontend por features porque cada funcionalidad tiene su propio flujo, sus propios datos y su propia interfaz. En lugar de imponer una arquitectura limpia clásica de backend sobre toda la app, aquí prefiero una versión adaptada: cada feature encapsula su dominio, sus repositorios y su presentación, y en [FrontEnd/src/core](../FrontEnd/src/core) dejo todo lo transversal como tema, hooks reutilizables o utilidades compartidas. De esa manera, si el proyecto crece, puedo escalar por funcionalidad sin mezclar responsabilidades ni volver el código inmantenible.
-#### Feature TaskList
+---
 
-- [FrontEnd/src/features/TaskList/domain](../FrontEnd/src/features/TaskList/domain)
-- [FrontEnd/src/features/TaskList/data](../FrontEnd/src/features/TaskList/data)
-- [FrontEnd/src/features/TaskList/presentation](../FrontEnd/src/features/TaskList/presentation)
+## 4. Arquitectura del frontend
 
-#### Feature TaskDetail
+El frontend usa una versión de Clean Architecture adaptada al ecosistema React Native: organización por features, cada una con sus propias capas internas, más un `core/` compartido.
 
-- [FrontEnd/src/features/TaskDetail/domain](../FrontEnd/src/features/TaskDetail/domain)
-- [FrontEnd/src/features/TaskDetail/data](../FrontEnd/src/features/TaskDetail/data)
-- [FrontEnd/src/features/TaskDetail/presentation](../FrontEnd/src/features/TaskDetail/presentation)
+```
+src/
+├── core/                     Transversal: hooks, theme, componentes base
+│   ├── hooks/useAsync.ts     Hook genérico de carga de datos
+│   ├── theme/theme.ts        Tokens de diseño centralizados
+│   └── components/           CenteredState, EmptyState, StatusBadge, SectionCard
+└── features/
+    ├── TaskList/
+    │   ├── domain/entities/  TaskI, TaskFilterI
+    │   ├── data/             datasource + repository
+    │   └── presentation/     TaskCard, TaskListView
+    ├── TaskDetail/
+    │   ├── domain/entities/
+    │   ├── data/
+    │   └── presentation/     TaskDetailView
+    └── TaskFilter/
+        └── presentation/     TaskFilterView
+```
 
+`TaskFilter` solo tiene capa de presentación porque no tiene entidad propia ni repositorio — su estado es efímero y se resuelve en memoria. La arquitectura se adapta a lo necesario por feature, no se aplica de forma rígida.
 
-#### Feature TaskFilter
-
-- [FrontEnd/src/features/TaskFilter/presentation](../FrontEnd/src/features/TaskFilter/presentation)
-
-El filtro tiene una naturaleza más ligera, así que tiene la capa de presentación, con la lógica mínima necesaria para abrir el selector y emitir el estado del filtro. No sigue una arquitectura completa de tres capas porque en este caso no hay una entidad compleja ni un repositorio que justifique un mayor nivel de abstracción. La arquitectura está adaptada a lo necesario en cada feature.
-### Tema y diseño reutilizable
-
-- [FrontEnd/src/core/theme/theme.ts](../FrontEnd/src/core/theme/theme.ts)
-
-Decidi centralizar el diseño en un tema compartido porque eso me da una única fuente de verdad para colores, espaciados, radios, tipografía y tokens de prioridad o estado. En lugar de repetir estilos en cada pantalla, el theme me da un patrón consistente parecido a lo que haría una librería de diseño, y eso ayuda a que el usuario se familiarice más rápido con la interfaz. Me base en lo que se propone en librerias como Material UI que aunque non estan permitidas en este reto tecnico, vi su utilidad para mantener patrones que ayudan a l usuario a familiarizarse aun mas con la app dando sentido a cada cosa, si luego cambia una paleta, un espaciado o un color de estado, lo actualizo en un solo lugar y todo el sistema se modifica al menos en los estilos generales.
-
-### Componentes compartidos
-
-- [FrontEnd/src/shared/components/StatusBadge.tsx](../FrontEnd/src/shared/components/StatusBadge.tsx)
-- [FrontEnd/src/shared/components/CenteredState.tsx](../FrontEnd/src/shared/components/CenteredState.tsx)
-- [FrontEnd/src/shared/components/SectionCard.tsx](../FrontEnd/src/shared/components/SectionCard.tsx)
-- [FrontEnd/src/shared/components/EmptyState.tsx](../FrontEnd/src/shared/components/EmptyState.tsx)
-
-Estos componentes repiten la misma estructura visual: badges, estados de carga, mensajes de error y pantallas vacías. Bueno esto siempre se busca ya que es una forma de evitar divergencias y de hacer que cualquier cambio de diseño se aplique de manera consistente.
-
-## 4. Flujo de datos
-
-### Listado de tareas
-
-1. `TaskListView` dispara `useAsync` para obtener datos.
-2. `taskListRepository` delega en el datasource.
-3. `taskRemoteDataSource` hace `fetch` a `/api/tasks` con los filtros aplicados.
-4. `TasksController` recibe la petición y la entrega a `TaskService`.
-5. `TaskRepository` ejecuta `sp_GetTasks`.
-6. El resultado vuelve a la UI y se renderiza en la lista.
-
-### Detalle de tarea
-
-1. `TaskDetailView` recibe el `taskId`.
-2. `taskDetailRepository` usa el datasource correspondiente.
-3. El datasource hace `fetch` a `/api/tasks/{id}`.
-4. `TasksController` delega en `TaskService.GetTaskByIdAsync`.
-5. `TaskRepository` ejecuta `sp_GetTaskById`.
-6. La vista muestra el detalle completo de la tarea.
+---
 
 ## 5. Decisiones técnicas clave
 
-- Decidí usar DTOs en lugar de devolver entidades del dominio directamente porque las entidades representan reglas internas del sistema y no todo lo que contienen debería exponerse a la API. Un DTO me permite controlar exactamente qué información sale y qué información se mantiene privada, lo que también me protege frente a cambios internos del dominio.
-- Tambien vi que `ITaskRepository` en Application me ayudaba porque ahí defino qué necesita el sistema, mientras que en Infrastructure dejo cómo se implementa. Así, la capa de negocio no depende de Dapper, SQL Server ni stored procedures, y si mañana cambio la fuente de datos, el resto de la aplicación no tiene por qué tocarse. Y `ITaskService` como capa separada porque su responsabilidad es orquestar el caso de uso, aplicar reglas y coordinar repositorios. El repository no debería asumir lógica de negocio compleja; su trabajo es acceso a datos, mientras que el service decide cómo se usan esos datos.
-- Inicializo los objetos en los DTOs porque prefiero que esos sean inmutables una vez creados. Alguna vi que eso evita modificaciones accidentales durante el flujo y hace que el código sea más predecible.
-- Use `DbConnectionFactory` para centralizar la creación de conexiones. Así los repositorios no necesitan conocer la cadena de conexión ni gestionar el ciclo de vida de la conexión directamente, y además me deja más fácil probar con otras fuentes de datos, solo modificando la conexion al menos en un proyecto grande.
-- Tambien use Dapper sobre EF Core porque el reto exige stored procedures explícitos y Dapper me permite mapear directamente el resultado SQL a DTOs eso hace el código más transparente y más cercano a la base de datos.
-- La arquitectura que uso no es limpia al 100%  en el frontend porque aquí prefiero organizar por features y dejar en [FrontEnd/src/core](../FrontEnd/src/core) todo lo que se puede reutilizar en otros componentes o features. Esa adaptación encaja mejor en una app móvil porque mantiene el sistema ordenado sin sobrecomplicarlo con varias capas como el BackEnd que si lo necesita.
+### ¿Por qué la organización difiere entre backend y frontend?
+
+El backend protege un dominio de negocio único y compartido — la separación por capa técnica global es la forma idiomática en .NET y es reconocida por cualquier desarrollador C# como Clean Architecture estándar.
+
+El frontend necesita escalar en número de pantallas. En una app real con muchas vistas, organizar por capa global (`components/`, `hooks/`, `views/` todos mezclados) produce carpetas inmanejables. Organizar por feature significa que eliminar o agregar una funcionalidad completa es tocar una sola carpeta, sin cazar archivos dispersos.
+
+Forzar paridad estructural entre backend y frontend hubiera priorizado la simetría visual sobre la resolución real del problema de cada capa.
+
+### ¿Por qué Dapper y no Entity Framework?
+
+El reto exige stored procedures explícitos. EF puede llamarlos pero agrega una capa de abstracción que oculta lo que ocurre en la base de datos. Dapper mapea el resultado del SP directamente al DTO — lo que se ve en el código es exactamente lo que se ejecuta en SQL Server. Para un sistema orientado a SPs, Dapper es la elección más honesta.
+
+### ¿Por qué DTOs y no devolver entidades del dominio?
+
+Las entidades tienen setters privados y representan reglas internas. Exponer una entidad directamente en la API acoplaría el contrato REST a la estructura interna del dominio. Un DTO permite controlar exactamente qué se expone y protege al sistema frente a cambios internos del modelo.
+
+### ¿Por qué `ITaskRepository` vive en Application y no en Infrastructure?
+
+Application define qué necesita (el contrato), Infrastructure define cómo lo hace (la implementación). Así Application no depende de Dapper ni de SQL Server. Si mañana se cambia a PostgreSQL o a una API externa, solo cambia Infrastructure — Application y Domain no se tocan.
+
+### ¿Por qué `useAsync` como hook genérico?
+
+Todas las vistas necesitan manejar los mismos estados: loading, error, data. Sin un hook centralizado, esa lógica se repetiría en cada vista con ligeras variaciones que eventualmente divergen. `useAsync` encapsula la máquina de estados una sola vez y cualquier vista la usa pasándole la función async correspondiente.
+
+### ¿Por qué `theme.ts` como única fuente de verdad de estilos?
+
+Inspirado en el enfoque de librerías de diseño como Material UI (que aunque no está permitida en este reto, su utilidad como referencia es válida): centralizar colores, espaciados, tipografía y tokens semánticos (colores por prioridad y estado) en un solo lugar garantiza consistencia visual y hace que un cambio de paleta se aplique en toda la app modificando un solo archivo.
+
+### ¿Por qué `DbConnectionFactory`?
+
+Los repositorios no deberían conocer la cadena de conexión ni gestionar el ciclo de vida de la conexión. La factory centraliza esa responsabilidad y facilita pruebas — en un contexto de integración se puede reemplazar la factory por una que apunte a otra base de datos sin tocar los repositorios.
+
+---
+
+## 6. Estrategia de pruebas
+
+Se priorizaron pruebas unitarias en las capas con lógica de negocio pura, evitando dependencias de red o base de datos real.
+
+### Backend (xUnit + Moq)
+
+| Clase | Qué cubre |
+|---|---|
+| `TaskItemTests` | Reglas del constructor: título vacío, solo espacios, excede 200 chars, límite exacto de 200 |
+| `TaskServiceTests` | Delegación al repositorio, tarea no encontrada, ids inválidos (0 y negativos) |
+
+El repositorio se simula con Moq para probar el Service de forma completamente aislada.
+
+### Frontend (Jest + React Native Testing Library)
+
+| Archivo | Qué cubre |
+|---|---|
+| `useAsync.test.ts` | Éxito, error, loading intermedio, reset de estado entre ejecuciones |
+| `taskListRepository.test.ts` | Que delega el filtro al datasource sin transformarlo |
+| `TaskCard.test.tsx` | Renderizado con descripción, sin descripción, respuesta al press |
+
+---
+
+## 7. Casos edge cubiertos
+
+| Caso | Dónde se maneja |
+|---|---|
+| `GET /api/tasks/{id}` con id inexistente | `TaskService` devuelve `null`, controller responde `404` |
+| `GET /api/tasks/{id}` con id negativo o cero | `TaskService` lanza `ArgumentException` antes de consultar la DB |
+| `GET /api/tasks/{id}` con id no numérico (ej. `/tasks/abc`) | ASP.NET rechaza automáticamente por la restricción `{id:int}` en la ruta |
+| Base de datos no disponible | `ExceptionMiddleware` atrapa la excepción y responde `500` con mensaje genérico |
+| Lista vacía tras aplicar filtros | Frontend muestra `EmptyState` en lugar de lista vacía sin mensaje |
+| Tarea sin descripción | `TaskCard` y `TaskDetailView` omiten la sección de descripción condicionalmente |

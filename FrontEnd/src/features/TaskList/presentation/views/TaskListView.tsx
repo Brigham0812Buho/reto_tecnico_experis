@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     color:      theme.colors.text.primary,
   },
   filterBtn: {
-    fontSize:   theme.fontSize.sm,
+    fontSize:   theme.fontSize.md,
     color:      theme.colors.primary,
     fontWeight: theme.fontWeight.medium,
   },
