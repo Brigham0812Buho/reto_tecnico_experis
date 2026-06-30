@@ -1,0 +1,18 @@
+# .NET
+**/bin/
+**/obj/
+**/*.user
+
+# Node / React Native
+**/node_modules/
+**/.expo/
+**/android/app/build/
+**/android/.gradle/
+**/android/local.properties
+**/ios/Pods/
+**/*.log
+
+# Generales
+.vscode/
+.idea/
+*.DS_Store
