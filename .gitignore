@@ -6,13 +6,23 @@
 # Node / React Native
 **/node_modules/
 **/.expo/
+**/.bundle/
+# Android — generado en build, no parte del código fuente
 **/android/app/build/
 **/android/.gradle/
-**/android/local.properties
+**/android/local.properties  
+
+# iOS — dependencias y build
 **/ios/Pods/
+**/ios/build/
+**/ios/*.xcworkspace/xcuserdata/
+
+# React Native general
+**/node_modules/
 **/*.log
+**/.env
 
 # Generales
-.vscode/
-.idea/
-*.DS_Store
+**/.vscode/
+**/.idea/
+**/*.DS_Store
