@@ -14,6 +14,7 @@ import TaskCard from '../components/TaskCard';
 import { TaskI } from '../../domain/entities/Task';
 import { TaskFilterI } from '../../domain/entities/TaskFilter';
 import { taskListRepository } from '../../data/repositories/taskRepository';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
   onTaskPress: (task: TaskI) => void;
@@ -22,6 +23,7 @@ interface Props {
 }
 
 const TaskListView = ({ onTaskPress, onFilterPress, filter = {} }: Props) => {
+  const insets = useSafeAreaInsets();
   const { data, loading, error, execute } = useAsync(
     () => taskListRepository.getAll(filter)
   );
@@ -40,7 +42,7 @@ const TaskListView = ({ onTaskPress, onFilterPress, filter = {} }: Props) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.sm }]}>
         <Text style={styles.title}>Tareas</Text>
         <TouchableOpacity onPress={onFilterPress}>
           <Text style={styles.filterBtn}>Filtrar</Text>

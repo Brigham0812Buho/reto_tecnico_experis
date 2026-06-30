@@ -10,19 +10,16 @@
 **/android/build/
 **/android/app/build/
 **/android/.gradle/
-**/android/local.properties  
-
-# iOS — dependencias y build
+**/android/local.properties
+**/android/app/**/Debug
+# iOS
 **/ios/Pods/
 **/ios/build/
 **/ios/*.xcworkspace/xcuserdata/
 
-# React Native general
-**/node_modules/
+# Generales
 **/*.log
 **/.env
-
-# Generales
 **/.vscode/
 **/.idea/
 **/*.DS_Store

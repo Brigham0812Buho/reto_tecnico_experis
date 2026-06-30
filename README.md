@@ -32,14 +32,18 @@ TaskManager/
 
 ## 1. Base de datos
 
-Ejecuta los scripts en este orden desde [BackEnd/database](BackEnd/database):
+### Opción A — Script único (recomendado)
+```bash
+sqlcmd -S TU_SERVIDOR -U TU_USUARIO -P TU_PASSWORD -i BackEnd/database/00_setup.sql
+```
 
-1. [BackEnd/database/01_database.sql](BackEnd/database/01_database.sql)
-2. [BackEnd/database/02_tables.sql](BackEnd/database/02_tables.sql)
-3. [BackEnd/database/03_data.sql](BackEnd/database/03_data.sql)
-4. [BackEnd/database/stored_procedures/sp_GetTaks.sql](BackEnd/database/stored_procedures/sp_GetTaks.sql)
-5. [BackEnd/database/stored_procedures/sp_GetTaskById.sql](BackEnd/database/stored_procedures/sp_GetTaskById.sql)
-6. [BackEnd/database/stored_procedures/sp_GetCatalogs.sql](BackEnd/database/stored_procedures/sp_GetCatalogs.sql)
+### Opción B — Scripts individuales en orden
+1. `01_create_database.sql`
+2. `02_create_tables.sql`
+3. `03_seed_data.sql`
+4. `stored_procedures/sp_GetTasks.sql`
+5. `stored_procedures/sp_GetTaskById.sql`
+6. `stored_procedures/sp_GetCatalogs.sql`
 
 ## 2. Ejecutar el backend
 
@@ -57,12 +61,28 @@ La API quedará disponible en:
 
 La cadena de conexión en [BackEnd/src/TaskManager.API/appsettings.json](BackEnd/src/TaskManager.API/appsettings.json) debe apuntar a la instancia de SQL Server.
 
-## 3. Configurar la URL del backend en el frontend
 
-En [FrontEnd/src/features/TaskList/data/datasource/taskRemoteDataSource.ts](FrontEnd/src/features/TaskList/data/datasource/taskRemoteDataSource.ts) y en [FrontEnd/src/features/TaskDetail/data/datasources/taskDetailDataSource.ts](FrontEnd/src/features/TaskDetail/data/datasources/taskDetailDataSource.ts), ajusta `BASE_URL`:
+## 3. Configurar variables de entorno
 
-- Emulador Android: `http://10.0.2.2:5139/api`
-- Dispositivo físico: `http://TU_IP_LOCAL:5139/api`
+### Backend
+Edita `BackEnd/src/TaskManager.API/appsettings.json` con tu cadena de conexión:
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=TU_SERVIDOR;Database=TaskManagementDB;User Id=TU_USUARIO;Password=TU_PASSWORD;TrustServerCertificate=True;"
+  }
+}
+```
+
+### Frontend
+Copia el archivo de ejemplo y edítalo:
+```bash
+cp FrontEnd/.env.example FrontEnd/.env
+```
+
+Ajusta `API_BASE_URL` según tu entorno:
+- **Emulador Android**: `http://10.0.2.2:5139/api`
+- **Dispositivo físico**: `http://TU_IP_LOCAL:5139/api` (obtén tu IP con `ipconfig` en Windows, ambos dispositivos deben estar en la misma red WiFi)
 
 ## 4. Ejecutar el frontend
 
@@ -74,10 +94,28 @@ npx react-native run-android
 
 ## 5. Ejecutar pruebas
 
+### Backend
+
+```bash
+cd BackEnd
+dotnet test
+```
+
+Cubre pruebas unitarias en:
+- `Domain` — validaciones de la entidad `TaskItem` (título vacío, espacios, límite de caracteres, caso límite exacto de 200 caracteres)
+- `Application` — comportamiento de `TaskService` (delegación al repositorio, tarea no encontrada, ids inválidos)
+
+### Frontend
+
 ```bash
 cd FrontEnd
 npm test -- --runInBand
 ```
+
+Cubre pruebas unitarias en:
+- `core/hooks` — máquina de estados de `useAsync` (éxito, error, loading, reset entre ejecuciones)
+- `features/TaskList/data` — que `taskListRepository` delega correctamente al datasource
+- `features/TaskList/presentation` — que `TaskCard` renderiza correctamente con y sin descripción
 
 ## 6. Documentación de arquitectura
 

@@ -5,9 +5,10 @@ import { TaskFilterI } from '../features/TaskList/domain/entities/TaskFilter';
 import TaskListView from '../features/TaskList/presentation/views/TaskListView';
 import TaskFilterView from '../features/TaskFilter/presentation/views/TaskFilterView';
 import TaskDetailView from '../features/TaskDetail/presentation/views/TaskDetailView';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export type RootStackParamList = {
-  TaskList:   undefined;
+  Task:   undefined;
   TaskDetail: { taskId: number };
 };
 
@@ -18,11 +19,12 @@ const AppNavigator = () => {
   const [filter, setFilter]               = useState<TaskFilterI>({});
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="TaskList">
-          {props => (
-            <>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Task" >
+            {props => (
+              <>
               <TaskListView
                 {...props}
                 filter={filter}
@@ -51,6 +53,7 @@ const AppNavigator = () => {
         </Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>
+    </SafeAreaProvider>
   );
 };
 

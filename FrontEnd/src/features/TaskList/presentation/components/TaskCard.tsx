@@ -18,7 +18,7 @@ const STATUS_LABELS: Record<string, string> = {
 const TaskCard = ({ task, onPress }: Props) => {
   const priorityColor      = theme.colors.priority[task.priorityName as keyof typeof theme.colors.priority]      ?? theme.colors.text.muted;
   const priorityBackground = theme.colors.priorityLight[task.priorityName as keyof typeof theme.colors.priorityLight] ?? theme.colors.background;
-  const statusColor        = theme.colors.status[task.statusName.replace(' ', '') as keyof typeof theme.colors.status] ?? theme.colors.text.muted;
+  const statusColor        = theme.colors.status[task.statusName as keyof typeof theme.colors.status] ?? theme.colors.text.muted;
 
   return (
     <TouchableOpacity

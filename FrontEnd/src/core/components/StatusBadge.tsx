@@ -27,12 +27,12 @@ const styles = StyleSheet.create({
     borderRadius:      theme.borderRadius.full,
   },
   dot: {
-    width:        6,
-    height:       6,
+    width:        7,
+    height:       7,
     borderRadius: 3,
   },
   badgeText: {
-    fontSize:   theme.fontSize.xs,
+    fontSize:   theme.fontSize.sm,
     fontWeight: theme.fontWeight.bold,
   },
 });

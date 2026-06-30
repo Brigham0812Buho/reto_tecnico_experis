@@ -12,6 +12,7 @@ import CenteredState from '../../../../core/components/CenteredState';
 import SectionCard from '../../../../core/components/SectionCard';
 import StatusBadge from '../../../../core/components/StatusBadge';
 import { taskDetailRepository } from '../../data/repositories/taskDetailRepository';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
   taskId: number;
@@ -19,6 +20,7 @@ interface Props {
 }
 
 const TaskDetailView = ({ taskId, onBack }: Props) => {
+  const insets = useSafeAreaInsets();
   const { data, loading, error, execute } = useAsync(
     () => taskDetailRepository.getById(taskId)
   );
@@ -40,8 +42,10 @@ const TaskDetailView = ({ taskId, onBack }: Props) => {
 
   return (
     <ScrollView style={styles.container}>
-      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-        <Text style={styles.backText}>← Volver</Text>
+      <TouchableOpacity 
+        style={[styles.backBtn, { paddingTop: insets.top + theme.spacing.sm }]} 
+        onPress={onBack}>
+        <Text style={styles.backText}> ← Volver</Text>
       </TouchableOpacity>
 
       <SectionCard>
@@ -104,8 +108,8 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
   },
   backText: {
-    fontSize:   theme.fontSize.md,
-    color:      theme.colors.primary,
+    fontSize:   theme.fontSize.lg,
+    color:      theme.colors.error,
     fontWeight: theme.fontWeight.medium,
   },
   title: {
