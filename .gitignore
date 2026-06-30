@@ -7,7 +7,7 @@
 **/node_modules/
 **/.expo/
 **/.bundle/
-# Android — generado en build, no parte del código fuente
+**/android/build/
 **/android/app/build/
 **/android/.gradle/
 **/android/local.properties  
